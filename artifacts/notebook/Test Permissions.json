@@ -1,6 +1,9 @@
 {
-	"name": "Manage Permissions",
+	"name": "Test Permissions",
 	"properties": {
+		"folder": {
+			"name": "Custom"
+		},
 		"nbformat": 4,
 		"nbformat_minor": 2,
 		"bigDataPool": {
@@ -18,7 +21,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "6bf69195-b633-4b4c-81d9-12708ec246e3"
+				"spark.autotune.trackingId": "7ccde332-421b-4a2c-8eaa-8e89ec17ae3d"
 			}
 		},
 		"metadata": {
