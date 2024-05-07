@@ -1,0 +1,138 @@
+{
+	"name": "Manage Permissions",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpoolpoc",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "6bf69195-b633-4b4c-81d9-12708ec246e3"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/c1ec8fd6-1910-4c4f-bc4b-0484bd45f5e6/resourceGroups/dev-synapse/providers/Microsoft.Synapse/workspaces/synapse-poc-demo/bigDataPools/sparkpoolpoc",
+				"name": "sparkpoolpoc",
+				"type": "Spark",
+				"endpoint": "https://synapse-poc-demo.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolpoc",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "3.1",
+				"nodeCount": 5,
+				"cores": 4,
+				"memory": 28,
+				"automaticScaleJobs": false
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from azureml.opendatasets import PublicHolidays\r\n",
+					"\r\n",
+					"from datetime import datetime\r\n",
+					"from dateutil import parser\r\n",
+					"from dateutil.relativedelta import relativedelta\r\n",
+					"\r\n",
+					"\r\n",
+					"end_date = datetime.today()\r\n",
+					"start_date = datetime.today() - relativedelta(months=6)\r\n",
+					"hol = PublicHolidays(start_date=start_date, end_date=end_date)\r\n",
+					"hol_df = hol.to_spark_dataframe()"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Display 5 rows\r\n",
+					"hol_df.show(5, truncate = False)"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.types import *\r\n",
+					"\r\n",
+					"# Primary storage info\r\n",
+					"account_name = 'synapsedemopoc' # fill in your primary account name\r\n",
+					"container_name = 'synapse' # fill in your container name\r\n",
+					"relative_path = 'synapse/synapse/' # fill in your relative folder path\r\n",
+					"\r\n",
+					"adls_path = 'abfss://%s@%s.dfs.core.windows.net/%s' % (container_name, account_name, relative_path)\r\n",
+					"print('Primary storage account path: ' + adls_path)\r\n",
+					"\r\n",
+					"json_path = adls_path + 'holiday.json'\r\n",
+					"print('json file path： ' + json_path)"
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"hol_df.write.json(json_path, mode = 'overwrite')"
+				],
+				"execution_count": 15
+			}
+		]
+	}
+}
