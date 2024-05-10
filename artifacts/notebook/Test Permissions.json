@@ -21,7 +21,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "b9fd6afc-9020-4312-b74c-f15f384b82dd"
+				"spark.autotune.trackingId": "4ac8c3d9-f558-4eee-8064-d4ad63e237de"
 			}
 		},
 		"metadata": {
@@ -67,7 +67,7 @@
 					"hol = PublicHolidays(start_date=start_date, end_date=end_date)\r\n",
 					"hol_df = hol.to_spark_dataframe()"
 				],
-				"execution_count": 1
+				"execution_count": 2
 			},
 			{
 				"cell_type": "code",
@@ -120,8 +120,8 @@
 					"\r\n",
 					"# Primary storage info\r\n",
 					"account_name = 'synapsedemopoc' # fill in your primary account name\r\n",
-					"container_name = 'synapse' # fill in your container name\r\n",
-					"relative_path = 'synapse/synapse/' # fill in your relative folder path\r\n",
+					"container_name = 'test' # fill in your container name\r\n",
+					"relative_path = 'holiday/' # fill in your relative folder path\r\n",
 					"\r\n",
 					"adls_path = 'abfss://%s@%s.dfs.core.windows.net/%s' % (container_name, account_name, relative_path)\r\n",
 					"print('Primary storage account path: ' + adls_path)\r\n",
@@ -129,7 +129,7 @@
 					"json_path = adls_path + 'holiday.json'\r\n",
 					"print('json file path： ' + json_path)"
 				],
-				"execution_count": 14
+				"execution_count": 7
 			},
 			{
 				"cell_type": "code",
@@ -176,9 +176,89 @@
 					}
 				},
 				"source": [
-					"spark.sql(\"USE sqlpoolpoc\")"
+					"spark.sql(\"CREATE DATABASE IF NOT EXISTS silver_edw_hprpt\")"
 				],
 				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.sql(\"USE silver_edw_hprpt\")"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Assuming hol_df is your DataFrame\r\n",
+					"hol_df.write.format(\"delta\").mode(\"overwrite\").save(adls_path)"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Create an external table pointing to the Delta files\r\n",
+					"spark.sql(f\"\"\"\r\n",
+					"CREATE TABLE IF NOT EXISTS PublicHolidays ( countryOrRegion string, holidayName string, normalizeHolidayName string, isPaidTimeOff boolean, countryRegionCode string, date string )\r\n",
+					"USING DELTA\r\n",
+					"LOCATION '{adls_path}'\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"country_code = 'US'  # Example country region code\r\n",
+					"df = spark.sql(f\"SELECT * FROM PublicHolidays WHERE countryRegionCode = '{country_code}'\")\r\n",
+					"df.show()"
+				],
+				"execution_count": 13
 			},
 			{
 				"cell_type": "code",
