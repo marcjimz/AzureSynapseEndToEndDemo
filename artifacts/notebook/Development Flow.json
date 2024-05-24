@@ -1,0 +1,598 @@
+{
+	"name": "Development Flow",
+	"properties": {
+		"folder": {
+			"name": "Custom"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpoolpoc",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "5a7a884f-6110-48f2-bef8-3df9a864ee45"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/c1ec8fd6-1910-4c4f-bc4b-0484bd45f5e6/resourceGroups/dev-synapse/providers/Microsoft.Synapse/workspaces/synapse-poc-demo/bigDataPools/sparkpoolpoc",
+				"name": "sparkpoolpoc",
+				"type": "Spark",
+				"endpoint": "https://synapse-poc-demo.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolpoc",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "3.1",
+				"nodeCount": 5,
+				"cores": 4,
+				"memory": 28,
+				"automaticScaleJobs": false
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Development Flow Example\r\n",
+					"\r\n",
+					"This is a quickstart example on development workflows using Spark. The notebook will make use of the following items:\r\n",
+					"\r\n",
+					"1. Creating and staging a Bronze layer table from the IRIS dataset\r\n",
+					"2. Reading Bronze Table to transform the data\r\n",
+					"3. Notebook code to transform the data and write it to temporary views\r\n",
+					"4. Emission of silver schema design with a final table to create\r\n",
+					"\r\n",
+					"## Bronze Table Ingestion\r\n",
+					"\r\n",
+					"This section is taking on the role of elevated Data Engineer roles to stage the data. This process can be run by a number of ways: Synapse Pipelines, Spark workloads, etc.\r\n",
+					"\r\n",
+					"### Example Code\r\n",
+					"\r\n",
+					"This code will load the data and store it, feel free to edit the parameters for your example:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# ADLS Gen2 account details (linked service)\r\n",
+					"account_name = \"synapsedemopoc\"\r\n",
+					"container_name = \"bronze\"\r\n",
+					"file_name = \"iris_raw\"\r\n",
+					"database_name = container_name\r\n",
+					"table_name = \"iris_data\"\r\n",
+					"external_data_source_name = file_name\r\n",
+					"credential_name = \"synapse-poc-demo\"  # The name of the credential configured in Synapse"
+				],
+				"execution_count": 73
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"This code below can be executed similarly to ingest and load data:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import os\r\n",
+					"from azure.identity import DefaultAzureCredential\r\n",
+					"from sklearn.datasets import load_iris\r\n",
+					"import pandas as pd\r\n",
+					"from pyspark.sql import SparkSession\r\n",
+					"import re\r\n",
+					"\r\n",
+					"# Initialize Spark session\r\n",
+					"spark = SparkSession.builder.appName(\"DevelopmentFlow\").getOrCreate()\r\n",
+					"\r\n",
+					"# change feature names for delta support\r\n",
+					"feature_names = [re.sub(r'\\(.*?\\)', '', x).replace(' ', '_')[:-1] for x in iris.feature_names]\r\n",
+					"\r\n",
+					"# Load the entire Iris dataset using sklearn\r\n",
+					"iris = load_iris()\r\n",
+					"iris_data = pd.DataFrame(iris.data, columns=feature_names)\r\n",
+					"iris_data['target'] = iris.target\r\n",
+					"\r\n",
+					"# Convert Pandas DataFrame to Spark DataFrame\r\n",
+					"iris_spark_df = spark.createDataFrame(iris_data)\r\n",
+					"\r\n",
+					"# Path in ADLS Gen2\r\n",
+					"adls_path = f\"abfss://{container_name}@{account_name}.dfs.core.windows.net/{file_name}\"\r\n",
+					"\r\n",
+					"# Write Spark DataFrame to ADLS Gen2 as CSV\r\n",
+					"iris_spark_df.write.format(\"delta\").mode(\"overwrite\").save(adls_path)\r\n",
+					"\r\n",
+					"print(f\"IRIS dataset uploaded to ADLS Gen2 at {adls_path}\")"
+				],
+				"execution_count": 87
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"This code needs to be executed once, to create the Lake database pointing to the external data. Similarly:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Construct the SQL commands\r\n",
+					"create_database_sql = f\"\"\"\r\n",
+					"CREATE DATABASE IF NOT EXISTS {database_name};\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"use_database_sql = f\"\"\"\r\n",
+					"USE {database_name};\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"create_external_table_sql = f\"\"\"\r\n",
+					"CREATE TABLE IF NOT EXISTS {table_name} (\r\n",
+					"    sepal_length double,\r\n",
+					"    sepal_width double,\r\n",
+					"    petal_length double,\r\n",
+					"    petal_width double,\r\n",
+					"    target long\r\n",
+					")\r\n",
+					"USING DELTA\r\n",
+					"LOCATION '{adls_path}'\r\n",
+					"\"\"\""
+				],
+				"execution_count": 90
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Let's execute the commands and create the tables:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Execute the SQL commands\r\n",
+					"spark.sql(create_database_sql)\r\n",
+					"spark.sql(use_database_sql)\r\n",
+					"spark.sql(create_external_table_sql)\r\n",
+					"\r\n",
+					"print(\"External table created successfully.\")\r\n",
+					""
+				],
+				"execution_count": 91
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Now as a **data reader** of the bronze data, I can understand more on the table and it's schema:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"list_tables=f\"\"\"\r\n",
+					"SHOW TABLES IN {database_name};\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"spark.sql(list_tables).show()"
+				],
+				"execution_count": 92
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"We can also get the definition of the table for our own usage:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"describe_table=f\"\"\"\r\n",
+					"DESCRIBE TABLE {database_name}.{table_name};\r\n",
+					"\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"spark.sql(describe_table).show()"
+				],
+				"execution_count": 103
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Silver Table Preparation\r\n",
+					"\r\n",
+					"In this transformation, we want to decorate the table with additional fields, that can be helpful for downstream analytic processes. We are going to generate the additional fields:\r\n",
+					"\r\n",
+					"1. Sepal ratio, known as sepal_length / sepal_width\r\n",
+					"2. Petal ratio, known as petal_length / petal_width\r\n",
+					"3. Text normalized target, for the type of flower.\r\n",
+					"\r\n",
+					"We will save this output, generate a new SQL statement, and persist this as a view to be used for our session. \r\n",
+					"\r\n",
+					"Please be aware that this example uses Spark SQL, but you can use any type of Spark commands to commit the transformation for your behalf."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"silver_table_transformation = f'''\r\n",
+					"SELECT \r\n",
+					"    sepal_length,\r\n",
+					"    sepal_width,\r\n",
+					"    petal_length,\r\n",
+					"    petal_width,\r\n",
+					"    CASE \r\n",
+					"        WHEN target = 0 THEN 'Setosa'\r\n",
+					"        WHEN target = 1 THEN 'Versicolour'\r\n",
+					"        WHEN target = 2 THEN 'Virginica'\r\n",
+					"        ELSE 'Unknown'\r\n",
+					"    END AS species,\r\n",
+					"    ROUND(sepal_length / sepal_width,4) AS sepal_ratio,\r\n",
+					"    ROUND(petal_length / petal_width,4) AS petal_ratio\r\n",
+					"FROM {database_name}.{table_name}\r\n",
+					"'''\r\n",
+					"\r\n",
+					"spark.sql(silver_table_transformation).show(5)"
+				],
+				"execution_count": 111
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"The view above looks good, let's go ahead and save it as a temporary view. There are two functions here to be used:\r\n",
+					"\r\n",
+					"1. **createOrReplaceGlobalTempView** [[docs]](https://spark.apache.org/docs/3.1.2/api/python/reference/api/pyspark.sql.DataFrame.createOrReplaceGlobalTempView.html): the lifetime of this temporary view is tied to this Spark application. So as long as the application is running, the view is accessible from multiple sessions.\r\n",
+					"2. **createOrReplaceTempView** [[docs]](https://spark.apache.org/docs/3.1.2/api/python/reference/api/pyspark.sql.DataFrame.createOrReplaceTempView.html): the lifetime of the temporary view is tied to the session. This view is only accessible by the running session."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"silver_df = spark.sql(silver_table_transformation)\r\n",
+					"silver_df.createOrReplaceGlobalTempView(\"silver_iris\")"
+				],
+				"execution_count": 115
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Since we saved the above view as a global view, we can access this from the global context similarly:"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.sql(\"SELECT * from global_temp.silver_iris\").show(5)"
+				],
+				"execution_count": 116
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"We can now describe the table and pass it along to our operational process to create this target view. We will want to submit the above transformations in conjunction with the required schemas to stand it up in the Silver metastore. "
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Get extended schema information of the temporary view\r\n",
+					"describe_extended = spark.sql(\"DESCRIBE EXTENDED global_temp.silver_iris\").collect()\r\n",
+					"\r\n",
+					"# Extract the schema details\r\n",
+					"schema_details = []\r\n",
+					"for row in describe_extended:\r\n",
+					"    if row.col_name and row.data_type:\r\n",
+					"        schema_details.append(f\"`{row.col_name}` {row.data_type}\")\r\n",
+					"\r\n",
+					"# Create the CREATE TABLE statement\r\n",
+					"silver_database_name = \"silver\"\r\n",
+					"silver_table_name = \"iris_silver\"\r\n",
+					"create_table_statement = f\"\"\"\r\n",
+					"CREATE TABLE {silver_database_name}.{silver_table_name} (\r\n",
+					"    {', '.join(schema_details)}\r\n",
+					") USING DELTA\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"print(create_table_statement)"
+				],
+				"execution_count": 124
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## End of Silver Preparation\r\n",
+					"\r\n",
+					"Keep in mind that there are multiple ways of orchestrating this workflow. These can both be managed and external tables, and depending on how you use you can choose to load the data directly or set your schema to use an external location. The steps below are now exectuable by your managed process to promote this schema, where the sections above would be executed using user permissions."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Construct the SQL commands\r\n",
+					"create_silver_database_sql = f\"\"\"\r\n",
+					"CREATE DATABASE IF NOT EXISTS {silver_database_name};\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"use_silver_database_sql = f\"\"\"\r\n",
+					"USE {silver_database_name};\r\n",
+					"\"\"\""
+				],
+				"execution_count": 125
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Execute the SQL commands\r\n",
+					"spark.sql(create_silver_database_sql)\r\n",
+					"spark.sql(use_silver_database_sql)\r\n",
+					"spark.sql(create_table_statement)\r\n",
+					"\r\n",
+					"print(\"External table promoted successfully.\")\r\n",
+					""
+				],
+				"execution_count": 126
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"list_tables=f\"\"\"\r\n",
+					"SHOW TABLES IN {silver_database_name};\r\n",
+					"\"\"\"\r\n",
+					"\r\n",
+					"spark.sql(list_tables).show()"
+				],
+				"execution_count": 127
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					""
+				]
+			}
+		]
+	}
+}
