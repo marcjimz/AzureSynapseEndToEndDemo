@@ -1,0 +1,227 @@
+{
+	"name": "Dynamic Parquet Loading",
+	"properties": {
+		"folder": {
+			"name": "Custom"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpoolpoc",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "1fff4759-045a-4101-853b-fdbeec04399a"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/c1ec8fd6-1910-4c4f-bc4b-0484bd45f5e6/resourceGroups/dev-synapse/providers/Microsoft.Synapse/workspaces/synapse-poc-demo/bigDataPools/sparkpoolpoc",
+				"name": "sparkpoolpoc",
+				"type": "Spark",
+				"endpoint": "https://synapse-poc-demo.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpoolpoc",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "3.1",
+				"nodeCount": 5,
+				"cores": 4,
+				"memory": 28,
+				"automaticScaleJobs": false
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"!pip install azure-storage-blob pyarrow"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# ETL\n",
+					"\n",
+					"This step shows an example workflow we can process per Parquet file. This uses Python, but this could live as a cell in many jobs to facilitate correction of the Parquet if upsource cannot fix it."
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"from azure.storage.blob import BlobServiceClient\n",
+					"from pyspark.sql import SparkSession\n",
+					"from pyspark.sql.functions import udf\n",
+					"from pyspark.sql.types import StringType, StructField, StructType, BinaryType\n",
+					"import pyarrow.parquet as pq\n",
+					"import pyarrow as pa\n",
+					"import base64\n",
+					"import os\n",
+					"import requests\n",
+					"from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient\n",
+					"from azure.identity import DefaultAzureCredential\n",
+					"\n",
+					"def download_blob_to_local_with_sas(url, local_file_path):\n",
+					"    # Fetch from URL\n",
+					"    response = requests.get(url)\n",
+					"    \n",
+					"    # Download the blob to a local file\n",
+					"    with open(local_file_path, \"wb\") as download_file:\n",
+					"        download_file.write(response.content)\n",
+					"\n",
+					"def update_parquet_schema(local_file_path, updated_file_path):\n",
+					"    # Read the Parquet file\n",
+					"    parquet_file = pq.ParquetFile(local_file_path)\n",
+					"    table = parquet_file.read()\n",
+					"    \n",
+					"    # Define a new schema with updated column types\n",
+					"    new_fields = []\n",
+					"    changed_fields = []\n",
+					"    for field in table.schema:\n",
+					"        if pa.types.is_fixed_size_binary(field.type):\n",
+					"            new_fields.append(pa.field(field.name, pa.binary()))\n",
+					"            changed_fields.append(field.name)\n",
+					"        else:\n",
+					"            new_fields.append(field)\n",
+					"    \n",
+					"    new_schema = pa.schema(new_fields)\n",
+					"    \n",
+					"    # Convert the table to a dictionary to manipulate the column data\n",
+					"    table_dict = table.to_pydict()\n",
+					"    \n",
+					"    # Create a new table with the updated schema\n",
+					"    new_table = pa.Table.from_pydict(table_dict, schema=new_schema)\n",
+					"    \n",
+					"    # Write the updated table back to Parquet\n",
+					"    pq.write_table(new_table, updated_file_path)\n",
+					"\n",
+					"    return changed_fields\n",
+					"\n",
+					"\n",
+					"def write_back_to_blob(storage_account_name, container_name, local_file_path, sas_token):\n",
+					"    # Create a BlobServiceClient using the DefaultAzureCredential\n",
+					"    blob_service_client = BlobServiceClient(\n",
+					"        account_url=f\"https://{storage_account_name}.blob.core.windows.net\",\n",
+					"        credential=sas_token\n",
+					"    )\n",
+					"\n",
+					"    # Define the blob name (the file name in the container)\n",
+					"    blob_name = os.path.basename(local_file_path)\n",
+					"\n",
+					"    # Create a BlobClient\n",
+					"    blob_client = blob_service_client.get_blob_client(container=container_name, blob=\"selecthealth/\" + blob_name)\n",
+					"\n",
+					"    # Read the local file\n",
+					"    with open(local_file_path, \"rb\") as data:\n",
+					"        # Upload the local file to the blob\n",
+					"        blob_client.upload_blob(data, overwrite=True)\n",
+					"\n",
+					"\n",
+					"# Azure Storage credentials\n",
+					"storage_account_name = \"synapsedemopoc\"\n",
+					"container_name = \"bronze\"\n",
+					"blob_url_with_sas = \"https://synapsedemopoc.blob.core.windows.net/bronze/selecthealth/delta.parquet?sp=r&st=2024-06-03T16:49:31Z&se=2025-06-04T00:49:31Z&spr=https&sv=2022-11-02&sr=b&sig=HKe5gqY4Hy66podjuu%2FeVkxzayRQz%2FVhXAyYl5vV4S0%3D\"\n",
+					"write_sas = \"sp=racdl&st=2024-06-03T17:39:32Z&se=2025-06-04T01:39:32Z&spr=https&sv=2022-11-02&sr=c&sig=Yp7pn64wjX8h8ciIVBeNwJdw1cYrm0l%2FyUocN1p2pjk%3D\"\n",
+					"local_file_path = \"local_delta.parquet\"\n",
+					"updated_file_path = \"corrected_local_delta.parquet\"\n",
+					"blob_output_path = f\"abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/selecthealth/corrected_{local_file_path}\"\n",
+					"\n",
+					"# Step 1: Download the Parquet file from Azure Blob Storage using SAS URL\n",
+					"download_blob_to_local_with_sas(blob_url_with_sas, local_file_path)\n",
+					"\n",
+					"# Step 2: Read and Modify the Parquet File Schema\n",
+					"changed_fields = update_parquet_schema(local_file_path, updated_file_path)\n",
+					"\n",
+					"# Step 3: Write the modified file back to Azure Blob Storage using Azure SDK\n",
+					"write_back_to_blob(storage_account_name, container_name, updated_file_path, write_sas)"
+				],
+				"execution_count": 21
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Initialize Spark session\n",
+					"spark = SparkSession.builder \\\n",
+					"    .appName(\"AzureParquetToDataframe\") \\\n",
+					"    .config(\"spark.sql.legacy.parquet.datetimeRebaseModeInRead\", \"CORRECTED\") \\\n",
+					"    .getOrCreate()\n",
+					"\n",
+					"# target file\n",
+					"blob_name = f\"selecthealth/{updated_file_path}\"\n",
+					"\n",
+					"# Load Parquet file from Azure Blob Storage\n",
+					"parquet_file_path = f\"abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{blob_name}\"\n",
+					"df = spark.read.parquet(parquet_file_path)\n",
+					"\n",
+					"# Define UDF to convert binary to base64 or hex string\n",
+					"def binary_to_string(value):\n",
+					"    if isinstance(value, bytes):\n",
+					"        return value.hex()  # Convert to HEX if byte string\n",
+					"    elif isinstance(value, (bytearray, memoryview)):\n",
+					"        return base64.b64encode(value).decode(\"utf-8\")  # Convert to Base64 otherwise\n",
+					"    return value\n",
+					"\n",
+					"# Register UDF\n",
+					"binary_to_string_udf = udf(binary_to_string, StringType())\n",
+					"\n",
+					"# Apply the UDF to the specified columns\n",
+					"for field in changed_fields:\n",
+					"    df = df.withColumn(field, binary_to_string_udf(df[field]))\n",
+					"\n",
+					"# Show the updated dataframe (optional)\n",
+					"df.show()"
+				],
+				"execution_count": 22
+			}
+		]
+	}
+}
