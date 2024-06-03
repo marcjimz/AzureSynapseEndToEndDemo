@@ -20,7 +20,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "1fff4759-045a-4101-853b-fdbeec04399a"
+				"spark.autotune.trackingId": "e3e32e40-396f-4006-9844-41829b848884"
 			}
 		},
 		"metadata": {
@@ -158,8 +158,8 @@
 					"# Azure Storage credentials\n",
 					"storage_account_name = \"synapsedemopoc\"\n",
 					"container_name = \"bronze\"\n",
-					"blob_url_with_sas = \"https://synapsedemopoc.blob.core.windows.net/bronze/selecthealth/delta.parquet?sp=r&st=2024-06-03T16:49:31Z&se=2025-06-04T00:49:31Z&spr=https&sv=2022-11-02&sr=b&sig=HKe5gqY4Hy66podjuu%2FeVkxzayRQz%2FVhXAyYl5vV4S0%3D\"\n",
-					"write_sas = \"sp=racdl&st=2024-06-03T17:39:32Z&se=2025-06-04T01:39:32Z&spr=https&sv=2022-11-02&sr=c&sig=Yp7pn64wjX8h8ciIVBeNwJdw1cYrm0l%2FyUocN1p2pjk%3D\"\n",
+					"blob_url_with_sas = \"https://synapsedemopoc.blob.core.windows.net/bronze/selecthealth/delta.parquet?<SASSCRUBED>\"\n",
+					"write_sas = \"sp=racdl&st=2024-06-03T17:39:32Z&se=2025-06-04T01:39:32Z&spr=https&sv=2022-11-02&sr=c&sig=<sscrubbed>\"\n",
 					"local_file_path = \"local_delta.parquet\"\n",
 					"updated_file_path = \"corrected_local_delta.parquet\"\n",
 					"blob_output_path = f\"abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/selecthealth/corrected_{local_file_path}\"\n",
